@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/platform/tenants")
+@RequestMapping("/api/v1/platform/tenants")
 @RequiredArgsConstructor
 @Tag(name = "Platform Tenant Management", description = "Endpoints for platform administrators to manage tenant lifecycles")
 public class PlatformTenantController {
@@ -37,8 +37,7 @@ public class PlatformTenantController {
     @GetMapping
     @Operation(summary = "List all tenants with pagination")
     public ResponseEntity<ApiResponse<Page<TenantResponse>>> listTenants(
-            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable
-    ) {
+            @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
         Page<TenantResponse> tenants = tenantService.listTenants(pageable);
         return ResponseEntity.ok(ApiResponse.success(tenants, "Tenants retrieved successfully"));
     }
@@ -61,8 +60,7 @@ public class PlatformTenantController {
     @Operation(summary = "Update tenant profile details")
     public ResponseEntity<ApiResponse<TenantResponse>> updateTenant(
             @PathVariable UUID id,
-            @Valid @RequestBody UpdateTenantRequest request
-    ) {
+            @Valid @RequestBody UpdateTenantRequest request) {
         TenantResponse updated = tenantService.updateTenant(id, request);
         return ResponseEntity.ok(ApiResponse.success(updated, "Tenant updated successfully"));
     }

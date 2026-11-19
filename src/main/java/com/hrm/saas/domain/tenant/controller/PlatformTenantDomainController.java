@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/platform/tenants/{tenantId}/domains")
+@RequestMapping("/api/v1/platform/tenants/{tenantId}/domains")
 @RequiredArgsConstructor
 @Tag(name = "Platform Tenant Domains", description = "Endpoints for managing custom domains and subdomains per tenant")
 public class PlatformTenantDomainController {
@@ -34,8 +34,7 @@ public class PlatformTenantDomainController {
     @Operation(summary = "Register a new subdomain or custom domain for a tenant")
     public ResponseEntity<ApiResponse<TenantDomainResponse>> registerDomain(
             @PathVariable UUID tenantId,
-            @Valid @RequestBody RegisterDomainRequest request
-    ) {
+            @Valid @RequestBody RegisterDomainRequest request) {
         TenantDomainResponse response = tenantDomainService.registerDomain(tenantId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Domain registered successfully"));
@@ -45,8 +44,7 @@ public class PlatformTenantDomainController {
     @Operation(summary = "Verify domain ownership")
     public ResponseEntity<ApiResponse<TenantDomainResponse>> verifyDomain(
             @PathVariable UUID tenantId,
-            @PathVariable UUID domainId
-    ) {
+            @PathVariable UUID domainId) {
         TenantDomainResponse response = tenantDomainService.verifyDomain(domainId);
         return ResponseEntity.ok(ApiResponse.success(response, "Domain verified successfully"));
     }
@@ -55,8 +53,7 @@ public class PlatformTenantDomainController {
     @Operation(summary = "Remove a domain from a tenant")
     public ResponseEntity<ApiResponse<Void>> deleteDomain(
             @PathVariable UUID tenantId,
-            @PathVariable UUID domainId
-    ) {
+            @PathVariable UUID domainId) {
         tenantDomainService.deleteDomain(domainId);
         return ResponseEntity.ok(ApiResponse.success(null, "Domain deleted successfully"));
     }
