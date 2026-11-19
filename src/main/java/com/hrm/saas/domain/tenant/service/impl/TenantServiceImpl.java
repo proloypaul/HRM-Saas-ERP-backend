@@ -66,8 +66,8 @@ public class TenantServiceImpl implements TenantService {
                         .build()
         );
 
-        // Reload tenant with domains populated
-        Tenant reloaded = tenantRepository.findByIdWithDomains(savedTenant.getId()).orElse(savedTenant);
+        // Reload tenant with domains AND settings populated (avoids N+1 on mapper)
+        Tenant reloaded = tenantRepository.findByIdWithDomainsAndSettings(savedTenant.getId()).orElse(savedTenant);
         log.info("Tenant '{}' created with default domain '{}'", slug, defaultDomain);
         return tenantMapper.toResponse(reloaded);
     }
@@ -75,8 +75,7 @@ public class TenantServiceImpl implements TenantService {
     @Override
     @Transactional(readOnly = true)
     public TenantResponse getTenantById(UUID id) {
-        Tenant tenant = tenantRepository.findByIdWithDomains(id)
-                .filter(t -> !t.getIsDeleted())
+        Tenant tenant = tenantRepository.findByIdWithDomainsAndSettings(id)
                 .orElseThrow(() -> new AppException("Tenant not found", HttpStatus.NOT_FOUND));
 
         return tenantMapper.toResponse(tenant);
@@ -85,7 +84,7 @@ public class TenantServiceImpl implements TenantService {
     @Override
     @Transactional(readOnly = true)
     public TenantResponse getTenantBySlug(String slug) {
-        Tenant tenant = tenantRepository.findBySlugAndIsDeletedFalse(slug.trim().toLowerCase())
+        Tenant tenant = tenantRepository.findBySlugWithDomainsAndSettings(slug.trim().toLowerCase())
                 .orElseThrow(() -> new AppException("Tenant not found with slug: " + slug, HttpStatus.NOT_FOUND));
 
         return tenantMapper.toResponse(tenant);
@@ -94,15 +93,15 @@ public class TenantServiceImpl implements TenantService {
     @Override
     @Transactional(readOnly = true)
     public Page<TenantResponse> listTenants(Pageable pageable) {
-        return tenantRepository.findAll(pageable)
+        // Uses EntityGraph to fetch domains + settings in one query → no N+1
+        return tenantRepository.findAllActiveWithDomainsAndSettings(pageable)
                 .map(tenantMapper::toResponse);
     }
 
     @Override
     @Transactional
     public TenantResponse updateTenant(UUID id, UpdateTenantRequest request) {
-        Tenant tenant = tenantRepository.findById(id)
-                .filter(t -> !t.getIsDeleted())
+        Tenant tenant = tenantRepository.findByIdWithDomainsAndSettings(id)
                 .orElseThrow(() -> new AppException("Tenant not found", HttpStatus.NOT_FOUND));
 
         if (request.getName() != null && !request.getName().isBlank()) {
@@ -133,8 +132,7 @@ public class TenantServiceImpl implements TenantService {
     @Override
     @Transactional
     public TenantResponse suspendTenant(UUID id) {
-        Tenant tenant = tenantRepository.findById(id)
-                .filter(t -> !t.getIsDeleted())
+        Tenant tenant = tenantRepository.findByIdWithDomainsAndSettings(id)
                 .orElseThrow(() -> new AppException("Tenant not found", HttpStatus.NOT_FOUND));
 
         tenant.setStatus(TenantStatus.SUSPENDED);
@@ -148,8 +146,7 @@ public class TenantServiceImpl implements TenantService {
     @Override
     @Transactional
     public TenantResponse activateTenant(UUID id) {
-        Tenant tenant = tenantRepository.findById(id)
-                .filter(t -> !t.getIsDeleted())
+        Tenant tenant = tenantRepository.findByIdWithDomainsAndSettings(id)
                 .orElseThrow(() -> new AppException("Tenant not found", HttpStatus.NOT_FOUND));
 
         tenant.setStatus(TenantStatus.ACTIVE);
@@ -163,8 +160,7 @@ public class TenantServiceImpl implements TenantService {
     @Override
     @Transactional
     public void deleteTenant(UUID id) {
-        Tenant tenant = tenantRepository.findById(id)
-                .filter(t -> !t.getIsDeleted())
+        Tenant tenant = tenantRepository.findByIdWithDomainsAndSettings(id)
                 .orElseThrow(() -> new AppException("Tenant not found", HttpStatus.NOT_FOUND));
 
         tenant.setIsDeleted(true);
