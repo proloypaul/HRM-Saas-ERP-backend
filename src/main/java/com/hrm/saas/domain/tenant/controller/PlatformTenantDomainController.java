@@ -1,5 +1,6 @@
 package com.hrm.saas.domain.tenant.controller;
 
+import com.hrm.saas.common.constants.ApiRoutes;
 import com.hrm.saas.common.response.ApiResponse;
 import com.hrm.saas.domain.tenant.dto.request.RegisterDomainRequest;
 import com.hrm.saas.domain.tenant.dto.response.TenantDomainResponse;
@@ -16,7 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/platform/tenants/{tenantId}/domains")
+@RequestMapping(ApiRoutes.Platform.Tenants.Domains.BASE)
 @RequiredArgsConstructor
 @Tag(name = "Platform Tenant Domains", description = "Endpoints for managing custom domains and subdomains per tenant")
 public class PlatformTenantDomainController {
@@ -40,7 +41,7 @@ public class PlatformTenantDomainController {
                 .body(ApiResponse.success(response, "Domain registered successfully"));
     }
 
-    @PostMapping("/{domainId}/verify")
+    @PostMapping(ApiRoutes.Platform.Tenants.Domains.VERIFY)
     @Operation(summary = "Verify domain ownership")
     public ResponseEntity<ApiResponse<TenantDomainResponse>> verifyDomain(
             @PathVariable UUID tenantId,
@@ -49,7 +50,7 @@ public class PlatformTenantDomainController {
         return ResponseEntity.ok(ApiResponse.success(response, "Domain verified successfully"));
     }
 
-    @DeleteMapping("/{domainId}")
+    @DeleteMapping(ApiRoutes.Platform.Tenants.Domains.BY_ID)
     @Operation(summary = "Remove a domain from a tenant")
     public ResponseEntity<ApiResponse<Void>> deleteDomain(
             @PathVariable UUID tenantId,

@@ -1,5 +1,6 @@
 package com.hrm.saas.config;
 
+import com.hrm.saas.common.constants.ApiRoutes;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -22,8 +23,8 @@ import java.util.List;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/api/v1/system/**",
-            "/api/v1/platform/**",
+            ApiRoutes.System.BASE + "/**",
+            ApiRoutes.Platform.BASE + "/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
