@@ -36,12 +36,29 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6380}
       timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 1000ms
 
-# Application Security & JWT
+# Application Security, Multi-Tenancy, Cache & JWT
 app:
   jwt:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  cache:
+    redis:
+      enabled: ${REDIS_CACHE_ENABLED:true}
+      default-ttl: ${REDIS_DEFAULT_TTL:30m}
+      domain-ttl: ${REDIS_DOMAIN_TTL:15m}
+      key-prefix: hrm
+  tenancy:
+    mode: ${TENANCY_MODE:LOCAL}
+    base-domain: ${BASE_DOMAIN:localhost}
+    allow-localhost-subdomains: ${ALLOW_LOCALHOST_SUBDOMAINS:true}
+    platform-subdomain: ${PLATFORM_SUBDOMAIN:platform}
 
 # Actuator & Observability
 management:

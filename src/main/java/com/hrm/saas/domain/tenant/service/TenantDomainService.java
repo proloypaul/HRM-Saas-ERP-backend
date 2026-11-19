@@ -1,6 +1,8 @@
 package com.hrm.saas.domain.tenant.service;
 
+import com.hrm.saas.common.cache.RedisCacheService;
 import com.hrm.saas.common.exception.AppException;
+import com.hrm.saas.config.RedisCacheProperties;
 import com.hrm.saas.domain.tenant.dto.request.RegisterDomainRequest;
 import com.hrm.saas.domain.tenant.dto.response.TenantDomainResponse;
 import com.hrm.saas.domain.tenant.dto.response.TenantSummaryDTO;
@@ -12,12 +14,10 @@ import com.hrm.saas.domain.tenant.repository.TenantDomainRepository;
 import com.hrm.saas.domain.tenant.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -29,14 +29,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TenantDomainService {
 
-    private static final String REDIS_DOMAIN_CACHE_PREFIX = "hrm:tenant:domain:";
-    private static final Duration DOMAIN_CACHE_TTL = Duration.ofMinutes(15);
+    private static final String DOMAIN_CACHE_PREFIX = "tenant:domain:";
 
     private final TenantDomainRepository tenantDomainRepository;
     private final TenantRepository tenantRepository;
     private final TenantMapper tenantMapper;
     private final DomainVerificationService domainVerificationService;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final RedisCacheService redisCacheService;
+    private final RedisCacheProperties cacheProperties;
 
     @Transactional(readOnly = true)
     public Optional<TenantSummaryDTO> resolveVerifiedDomain(String host) {
@@ -44,45 +44,29 @@ public class TenantDomainService {
             return Optional.empty();
         }
         String normalizedHost = host.trim().toLowerCase();
-        String cacheKey = REDIS_DOMAIN_CACHE_PREFIX + normalizedHost;
+        String cacheKey = DOMAIN_CACHE_PREFIX + normalizedHost;
 
-        // 1. Try Redis cache lookup
-        try {
-            Object cached = redisTemplate.opsForValue().get(cacheKey);
-            if (cached instanceof TenantSummaryDTO summary) {
-                log.debug("Redis cache hit for domain '{}' -> tenant '{}'", normalizedHost, summary.getSlug());
-                return Optional.of(summary);
-            }
-        } catch (Exception e) {
-            log.warn("Redis domain cache query failed for host '{}': {}", normalizedHost, e.getMessage());
-        }
+        // Centralized Cache-Aside with fallback & safe repopulation
+        return redisCacheService.getOrFetch(
+                cacheKey,
+                TenantSummaryDTO.class,
+                cacheProperties.getDomainTtl(),
+                () -> fetchDomainFromDatabase(normalizedHost));
+    }
 
-        // 2. Query Database
-        Optional<TenantDomain> domainOpt = tenantDomainRepository.findByDomainAndIsVerifiedTrueWithTenant(normalizedHost);
-        if (domainOpt.isEmpty()) {
-            return Optional.empty();
-        }
-
-        TenantDomain domain = domainOpt.get();
-        Tenant tenant = domain.getTenant();
-
-        TenantSummaryDTO summary = TenantSummaryDTO.builder()
-                .tenantId(tenant.getId())
-                .name(tenant.getName())
-                .slug(tenant.getSlug())
-                .status(tenant.getStatus())
-                .domain(domain.getDomain())
-                .verified(domain.getIsVerified())
-                .build();
-
-        // 3. Cache result in Redis
-        try {
-            redisTemplate.opsForValue().set(cacheKey, summary, DOMAIN_CACHE_TTL);
-        } catch (Exception e) {
-            log.warn("Failed to write domain '{}' to Redis cache: {}", normalizedHost, e.getMessage());
-        }
-
-        return Optional.of(summary);
+    private Optional<TenantSummaryDTO> fetchDomainFromDatabase(String normalizedHost) {
+        return tenantDomainRepository.findByDomainAndIsVerifiedTrueWithTenant(normalizedHost)
+                .map(domain -> {
+                    Tenant tenant = domain.getTenant();
+                    return TenantSummaryDTO.builder()
+                            .tenantId(tenant.getId())
+                            .name(tenant.getName())
+                            .slug(tenant.getSlug())
+                            .status(tenant.getStatus())
+                            .domain(domain.getDomain())
+                            .verified(domain.getIsVerified())
+                            .build();
+                });
     }
 
     @Transactional
@@ -99,7 +83,8 @@ public class TenantDomainService {
         String verificationToken = "hrm-verify-" + UUID.randomUUID();
 
         // Local development domains (*.localhost) are automatically verified
-        boolean autoVerified = normalizedDomain.endsWith(".localhost") || request.getDomainType() == DomainType.SUBDOMAIN;
+        boolean autoVerified = normalizedDomain.endsWith(".localhost")
+                || request.getDomainType() == DomainType.SUBDOMAIN;
 
         TenantDomain domain = TenantDomain.builder()
                 .tenant(tenant)
@@ -129,11 +114,11 @@ public class TenantDomainService {
 
         boolean verified = domainVerificationService.verifyDomainOwnership(
                 domain.getDomain(),
-                domain.getVerificationToken()
-        );
+                domain.getVerificationToken());
 
         if (!verified) {
-            throw new AppException("Domain ownership verification failed. Please check DNS TXT record.", HttpStatus.BAD_REQUEST);
+            throw new AppException("Domain ownership verification failed. Please check DNS TXT record.",
+                    HttpStatus.BAD_REQUEST);
         }
 
         domain.setIsVerified(true);
@@ -164,11 +149,8 @@ public class TenantDomainService {
     }
 
     public void evictDomainCache(String domain) {
-        if (domain == null) return;
-        try {
-            redisTemplate.delete(REDIS_DOMAIN_CACHE_PREFIX + domain.trim().toLowerCase());
-        } catch (Exception e) {
-            log.warn("Failed to evict Redis cache for domain '{}': {}", domain, e.getMessage());
-        }
+        if (domain == null)
+            return;
+        redisCacheService.evict(DOMAIN_CACHE_PREFIX + domain.trim().toLowerCase());
     }
 }
