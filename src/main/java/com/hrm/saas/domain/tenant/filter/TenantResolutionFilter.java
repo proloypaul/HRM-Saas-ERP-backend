@@ -37,9 +37,10 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getRequestURI();
-        // Bypass platform management endpoints, public documentation, and health actuators
+        // Bypass platform management endpoints, auth endpoints, public documentation, and health actuators
         return path.startsWith("/api/platform/") ||
                 path.startsWith("/api/v1/platform/") ||
+                path.startsWith("/api/v1/auth/") ||
                 path.startsWith("/api/v1/system/") ||
                 path.startsWith("/v3/api-docs") ||
                 path.startsWith("/swagger-ui") ||

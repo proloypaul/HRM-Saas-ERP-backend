@@ -1,6 +1,8 @@
 package com.hrm.saas.config;
 
 import com.hrm.saas.common.constants.ApiRoutes;
+import com.hrm.saas.domain.auth.security.JwtAuthenticationFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -11,6 +13,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -20,11 +23,21 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     private static final String[] PUBLIC_ENDPOINTS = {
             ApiRoutes.System.BASE + "/**",
             ApiRoutes.Platform.BASE + "/**",
+            ApiRoutes.Auth.BASE + "/register",
+            ApiRoutes.Auth.BASE + "/login",
+            ApiRoutes.Auth.BASE + "/refresh",
+            ApiRoutes.Auth.BASE + "/logout",
+            ApiRoutes.Auth.BASE + "/forgot-password",
+            ApiRoutes.Auth.BASE + "/reset-password",
+            ApiRoutes.Auth.BASE + "/verify-email",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
@@ -41,6 +54,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 
