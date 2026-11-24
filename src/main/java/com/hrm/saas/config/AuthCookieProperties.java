@@ -10,11 +10,15 @@ import java.time.Duration;
 @Configuration
 @ConfigurationProperties(prefix = "app.security.cookie")
 public class AuthCookieProperties {
-    private String name = "hrm_refresh_token";
-    private boolean httpOnly = true;
-    private boolean secure = false;
-    private String sameSite = "Lax";
+    private String name;
+    private boolean httpOnly;
+    private boolean secure;
+    private String sameSite;
     private String domain;
-    private String path = "/api/v1/auth";
-    private Duration maxAge = Duration.ofDays(7);
+    private String path;
+    private Duration maxAge;
+
+    public String getDomain() {
+        return (domain != null && !domain.isBlank()) ? domain.trim() : null;
+    }
 }

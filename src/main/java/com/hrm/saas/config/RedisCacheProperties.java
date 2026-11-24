@@ -14,20 +14,20 @@ public class RedisCacheProperties {
     /**
      * Master switch to enable or disable Redis caching
      */
-    private boolean enabled = true;
+    private boolean enabled;;
 
     /**
      * Default TTL for cached items
      */
-    private Duration defaultTtl = Duration.ofMinutes(30);
+    private Duration defaultTtl;;
 
     /**
      * TTL for resolved tenant domain lookups
      */
-    private Duration domainTtl = Duration.ofMinutes(15);
+    private Duration domainTtl;;
 
     /**
      * Prefix for all application Redis keys to prevent collisions
      */
-    private String keyPrefix = "hrm";
+    private String keyPrefix;
 }

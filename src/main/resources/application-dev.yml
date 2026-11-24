@@ -52,13 +52,13 @@ app:
     issuer: hrm-saas
   security:
     cookie:
-      name: "hrm_refresh_token"
-      http-only: true
-      secure: false
-      same-site: "Lax"
-      domain: null
-      path: "/api/v1/auth"
-      max-age: 7d
+      name: ${COOKIE_NAME:hrm_refresh_token}
+      http-only: ${COOKIE_HTTP_ONLY:true}
+      secure: ${COOKIE_SECURE:false}
+      same-site: ${COOKIE_SAME_SITE:Lax}
+      domain: ${COOKIE_DOMAIN:}
+      path: ${COOKIE_PATH:/api/v1/auth}
+      max-age: ${COOKIE_MAX_AGE:7d}
   cache:
     redis:
       enabled: ${REDIS_CACHE_ENABLED:true}
