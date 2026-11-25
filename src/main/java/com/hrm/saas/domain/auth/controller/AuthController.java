@@ -46,8 +46,7 @@ public class AuthController {
 
         AuthResult result = authService.register(request, userAgent, ipAddress);
         ResponseCookie refreshCookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
-        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken(),
-                null);
+        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken());
 
         // Access token is kept only in HttpOnly cookie; remove it from API payload
         AuthResponse responseBody = result.getAuthResponse();
@@ -69,8 +68,7 @@ public class AuthController {
 
         AuthResult result = authService.login(request, userAgent, ipAddress);
         ResponseCookie refreshCookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
-        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken(),
-                null);
+        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken());
 
         // Access token is kept only in HttpOnly cookie; remove it from API payload
         AuthResponse responseBody = result.getAuthResponse();
@@ -100,8 +98,7 @@ public class AuthController {
         AuthResult result = authService.refresh(tokenToUse, userAgent, ipAddress);
         // ResponseCookie refreshCookie =
         // cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
-        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken(),
-                null);
+        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken());
 
         AuthResponse responseBody = result.getAuthResponse();
         responseBody.setAccessToken(null);
@@ -145,8 +142,7 @@ public class AuthController {
         AuthResult result = authService.switchTenant(principal.getUserId(), request.getTenantId(), userAgent,
                 ipAddress);
         ResponseCookie refreshCookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
-        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken(),
-                null);
+        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken());
 
         AuthResponse responseBody = result.getAuthResponse();
         responseBody.setAccessToken(null);

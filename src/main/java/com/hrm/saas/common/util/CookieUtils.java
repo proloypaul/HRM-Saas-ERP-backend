@@ -17,7 +17,8 @@ public class CookieUtils {
      * Creates the HttpOnly Refresh Token Cookie (scoped to auth paths).
      */
     public ResponseCookie createRefreshTokenCookie(String tokenValue) {
-        String path = cookieProperties.getRefreshPath() != null ? cookieProperties.getRefreshPath() : cookieProperties.getPath();
+        String path = cookieProperties.getRefreshPath() != null ? cookieProperties.getRefreshPath()
+                : cookieProperties.getPath();
         ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(cookieProperties.getName(), tokenValue)
                 .httpOnly(cookieProperties.isHttpOnly())
                 .secure(cookieProperties.isSecure())
@@ -33,15 +34,17 @@ public class CookieUtils {
     }
 
     /**
-     * Creates the HttpOnly Access Token Cookie (scoped to all API endpoints, with 15m expiration).
+     * Creates the HttpOnly Access Token Cookie (scoped to all API endpoints, with
+     * 15m expiration).
      */
-    public ResponseCookie createAccessTokenCookie(String tokenValue, Duration duration) {
-        Duration maxAge = duration != null ? duration : Duration.ofMinutes(15);
-        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(cookieProperties.getAccessCookieName(), tokenValue)
+    public ResponseCookie createAccessTokenCookie(String tokenValue) {
+        // Duration maxAge = duration != null ? duration : Duration.ofMinutes(15);
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie
+                .from(cookieProperties.getAccessCookieName(), tokenValue)
                 .httpOnly(cookieProperties.isHttpOnly())
                 .secure(cookieProperties.isSecure())
                 .path(cookieProperties.getPath())
-                .maxAge(maxAge)
+                .maxAge(cookieProperties.getMaxAge())
                 .sameSite(cookieProperties.getSameSite());
 
         if (cookieProperties.getDomain() != null && !cookieProperties.getDomain().isBlank()) {
@@ -55,7 +58,8 @@ public class CookieUtils {
      * Evicts the Refresh Token cookie on logout.
      */
     public ResponseCookie createCleanRefreshLogoutCookie() {
-        String path = cookieProperties.getRefreshPath() != null ? cookieProperties.getRefreshPath() : cookieProperties.getPath();
+        String path = cookieProperties.getRefreshPath() != null ? cookieProperties.getRefreshPath()
+                : cookieProperties.getPath();
         ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(cookieProperties.getName(), "")
                 .httpOnly(cookieProperties.isHttpOnly())
                 .secure(cookieProperties.isSecure())
