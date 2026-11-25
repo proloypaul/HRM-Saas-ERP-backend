@@ -3,11 +3,14 @@ package com.hrm.saas.domain.auth.entity;
 import com.hrm.saas.common.entity.BaseEntity;
 import com.hrm.saas.domain.auth.enums.MembershipRole;
 import com.hrm.saas.domain.auth.enums.MembershipStatus;
+import com.hrm.saas.domain.rbac.entity.Role;
 import com.hrm.saas.domain.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -46,6 +49,19 @@ public class TenantMembership extends BaseEntity {
     @Column(name = "role", nullable = false, length = 50)
     @Builder.Default
     private MembershipRole role = MembershipRole.EMPLOYEE;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "membership_roles",
+            joinColumns = @JoinColumn(name = "membership_id", referencedColumnName = "id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id"),
+            indexes = {
+                    @Index(name = "idx_mem_roles_mem", columnList = "membership_id"),
+                    @Index(name = "idx_mem_roles_role", columnList = "role_id")
+            }
+    )
+    @Builder.Default
+    private Set<Role> roles = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

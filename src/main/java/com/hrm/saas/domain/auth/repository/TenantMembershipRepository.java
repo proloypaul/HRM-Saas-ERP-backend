@@ -29,5 +29,17 @@ public interface TenantMembershipRepository extends JpaRepository<TenantMembersh
             "WHERE tm.user.id = :userId AND tm.tenant.id = :tenantId AND tm.isDeleted = false")
     Optional<TenantMembership> findByUserIdAndTenantIdWithTenant(@Param("userId") UUID userId, @Param("tenantId") UUID tenantId);
 
+    @Query("SELECT tm FROM TenantMembership tm " +
+            "LEFT JOIN FETCH tm.roles r " +
+            "LEFT JOIN FETCH r.permissions " +
+            "WHERE tm.user.id = :userId AND tm.tenant.id = :tenantId AND tm.isDeleted = false")
+    Optional<TenantMembership> findByTenantIdAndUserIdWithRoles(@Param("tenantId") UUID tenantId, @Param("userId") UUID userId);
+
+    @Query("SELECT tm FROM TenantMembership tm " +
+            "LEFT JOIN FETCH tm.roles r " +
+            "LEFT JOIN FETCH tm.user u " +
+            "WHERE tm.tenant.id = :tenantId AND tm.isDeleted = false")
+    List<TenantMembership> findByTenantIdWithRolesAndUser(@Param("tenantId") UUID tenantId);
+
     boolean existsByUserIdAndTenantIdAndIsDeletedFalse(UUID userId, UUID tenantId);
 }
