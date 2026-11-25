@@ -40,42 +40,51 @@ public class AuthController {
     @Operation(summary = "Register user and optional company workspace")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,
-            HttpServletRequest servletRequest
-    ) {
+            HttpServletRequest servletRequest) {
         String userAgent = servletRequest.getHeader("User-Agent");
         String ipAddress = servletRequest.getRemoteAddr();
 
         AuthResult result = authService.register(request, userAgent, ipAddress);
-        ResponseCookie cookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
+        ResponseCookie refreshCookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
+        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken());
+
+        // Access token is kept only in HttpOnly cookie; remove it from API payload
+        AuthResponse responseBody = result.getAuthResponse();
+        responseBody.setAccessToken(null);
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(ApiResponse.success(result.getAuthResponse(), "User registered successfully"));
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
+                .body(ApiResponse.success(responseBody, "User registered successfully"));
     }
 
     @PostMapping(ApiRoutes.Auth.LOGIN)
     @Operation(summary = "Authenticate user and issue tokens")
     public ResponseEntity<ApiResponse<AuthResponse>> login(
             @Valid @RequestBody LoginRequest request,
-            HttpServletRequest servletRequest
-    ) {
+            HttpServletRequest servletRequest) {
         String userAgent = servletRequest.getHeader("User-Agent");
         String ipAddress = servletRequest.getRemoteAddr();
 
         AuthResult result = authService.login(request, userAgent, ipAddress);
-        ResponseCookie cookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
+        ResponseCookie refreshCookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
+        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken());
+
+        // Access token is kept only in HttpOnly cookie; remove it from API payload
+        AuthResponse responseBody = result.getAuthResponse();
+        responseBody.setAccessToken(null);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(ApiResponse.success(result.getAuthResponse(), "Authentication successful"));
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
+                .body(ApiResponse.success(responseBody, "Authentication successful"));
     }
 
     @PostMapping(ApiRoutes.Auth.REFRESH)
     @Operation(summary = "Rotate refresh token and issue new access token")
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(
             @CookieValue(name = "${app.security.cookie.name:hrm_refresh_token}", required = false) String cookieRefreshToken,
-            HttpServletRequest servletRequest
-    ) {
+            HttpServletRequest servletRequest) {
         String tokenToUse = cookieRefreshToken;
 
         // Fallback: Check request header if cookie was not passed
@@ -87,26 +96,33 @@ public class AuthController {
         String ipAddress = servletRequest.getRemoteAddr();
 
         AuthResult result = authService.refresh(tokenToUse, userAgent, ipAddress);
-        ResponseCookie cookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
+        // ResponseCookie refreshCookie =
+        // cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
+        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken());
+
+        AuthResponse responseBody = result.getAuthResponse();
+        responseBody.setAccessToken(null);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(ApiResponse.success(result.getAuthResponse(), "Tokens refreshed successfully"));
+                // .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
+                .body(ApiResponse.success(responseBody, "Tokens refreshed successfully"));
     }
 
     @PostMapping(ApiRoutes.Auth.LOGOUT)
     @Operation(summary = "Revoke session and clear refresh cookie")
     public ResponseEntity<ApiResponse<Void>> logout(
             @CookieValue(name = "${app.security.cookie.name:hrm_refresh_token}", required = false) String cookieRefreshToken,
-            @AuthenticationPrincipal UserPrincipal principal
-    ) {
+            @AuthenticationPrincipal UserPrincipal principal) {
         UUID userId = principal != null ? principal.getUserId() : null;
         authService.logout(cookieRefreshToken, userId);
 
-        ResponseCookie cleanCookie = cookieUtils.createCleanLogoutCookie();
+        ResponseCookie cleanRefreshCookie = cookieUtils.createCleanRefreshLogoutCookie();
+        ResponseCookie cleanAccessCookie = cookieUtils.createCleanAccessLogoutCookie();
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cleanCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, cleanRefreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, cleanAccessCookie.toString())
                 .body(ApiResponse.success(null, "Logged out successfully"));
     }
 
@@ -115,8 +131,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> switchTenant(
             @Valid @RequestBody SwitchTenantRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
-            HttpServletRequest servletRequest
-    ) {
+            HttpServletRequest servletRequest) {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Unauthenticated"));
         }
@@ -124,12 +139,18 @@ public class AuthController {
         String userAgent = servletRequest.getHeader("User-Agent");
         String ipAddress = servletRequest.getRemoteAddr();
 
-        AuthResult result = authService.switchTenant(principal.getUserId(), request.getTenantId(), userAgent, ipAddress);
-        ResponseCookie cookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
+        AuthResult result = authService.switchTenant(principal.getUserId(), request.getTenantId(), userAgent,
+                ipAddress);
+        ResponseCookie refreshCookie = cookieUtils.createRefreshTokenCookie(result.getRawRefreshToken());
+        ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(result.getAuthResponse().getAccessToken());
+
+        AuthResponse responseBody = result.getAuthResponse();
+        responseBody.setAccessToken(null);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(ApiResponse.success(result.getAuthResponse(), "Switched tenant successfully"));
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
+                .body(ApiResponse.success(responseBody, "Switched tenant successfully"));
     }
 
     @GetMapping(ApiRoutes.Auth.ME)
@@ -145,8 +166,7 @@ public class AuthController {
     @GetMapping(ApiRoutes.Auth.TENANTS)
     @Operation(summary = "Get available tenant memberships for current user")
     public ResponseEntity<ApiResponse<List<TenantMembershipResponse>>> getUserTenants(
-            @AuthenticationPrincipal UserPrincipal principal
-    ) {
+            @AuthenticationPrincipal UserPrincipal principal) {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("Unauthenticated"));
         }
@@ -158,7 +178,8 @@ public class AuthController {
     @Operation(summary = "Request password reset token")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         authService.forgotPassword(request);
-        return ResponseEntity.ok(ApiResponse.success(null, "If your email is registered, you will receive password reset instructions."));
+        return ResponseEntity.ok(ApiResponse.success(null,
+                "If your email is registered, you will receive password reset instructions."));
     }
 
     @PostMapping(ApiRoutes.Auth.RESET_PASSWORD)

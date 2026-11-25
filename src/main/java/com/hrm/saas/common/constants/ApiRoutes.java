@@ -70,4 +70,21 @@ public final class ApiRoutes {
             }
         }
     }
+
+    /**
+     * RBAC, Role & Permission Management endpoints
+     */
+    public static final class Rbac {
+        private Rbac() {}
+
+        public static final String PERMISSIONS = V1 + "/permissions";
+        public static final String ROLES = V1 + "/roles";
+        public static final String ROLE_BY_ID = "/{id}";
+        public static final String ROLE_CLONE = "/{id}/clone";
+
+        public static final String MEMBERSHIPS = V1 + "/memberships";
+        public static final String MEMBERSHIP_ROLES = "/{id}/roles";
+
+        public static final String ME_PERMISSIONS = Auth.BASE + "/me/permissions";
+    }
 }

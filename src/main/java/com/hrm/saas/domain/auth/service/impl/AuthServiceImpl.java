@@ -20,6 +20,9 @@ import com.hrm.saas.domain.auth.repository.UserRepository;
 import com.hrm.saas.domain.auth.security.JwtTokenProvider;
 import com.hrm.saas.domain.auth.security.TokenHashUtils;
 import com.hrm.saas.domain.auth.service.AuthService;
+import com.hrm.saas.domain.rbac.constants.RbacPermissions;
+import com.hrm.saas.domain.rbac.entity.Role;
+import com.hrm.saas.domain.rbac.service.PermissionCatalogSeeder;
 import com.hrm.saas.domain.tenant.dto.request.CreateTenantRequest;
 import com.hrm.saas.domain.tenant.dto.response.TenantResponse;
 import com.hrm.saas.domain.tenant.entity.Tenant;
@@ -36,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -53,6 +57,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtProperties jwtProperties;
+    private final PermissionCatalogSeeder permissionCatalogSeeder;
 
     @Override
     @Transactional
@@ -85,10 +90,20 @@ public class AuthServiceImpl implements AuthService {
             Tenant tenant = tenantRepository.findById(tenantResponse.getId())
                     .orElseThrow(() -> new AppException("Tenant not found after creation", HttpStatus.INTERNAL_SERVER_ERROR));
 
+            // Seed RBAC system roles for this tenant
+            List<Role> seededRoles = permissionCatalogSeeder.seedSystemRolesForTenant(tenant);
+            Role tenantAdminRole = seededRoles.stream()
+                    .filter(r -> RbacPermissions.ROLE_TENANT_ADMIN.equals(r.getCode()))
+                    .findFirst()
+                    .orElse(null);
+
+            Set<Role> assignedRoles = tenantAdminRole != null ? new java.util.HashSet<>(List.of(tenantAdminRole)) : new java.util.HashSet<>();
+
             TenantMembership membership = TenantMembership.builder()
                     .user(savedUser)
                     .tenant(tenant)
                     .role(MembershipRole.OWNER)
+                    .roles(assignedRoles)
                     .status(MembershipStatus.ACTIVE)
                     .build();
 

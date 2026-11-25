@@ -11,11 +11,13 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "app.security.cookie")
 public class AuthCookieProperties {
     private String name;
+    private String accessCookieName;
     private boolean httpOnly;
     private boolean secure;
     private String sameSite;
     private String domain;
     private String path;
+    private String refreshPath;
     private Duration maxAge;
 
     public String getDomain() {
