@@ -1,7 +1,6 @@
 package com.hrm.saas.domain.auth.security;
 
 import com.hrm.saas.config.JwtProperties;
-import com.hrm.saas.domain.auth.enums.MembershipRole;
 import com.hrm.saas.domain.auth.enums.TokenType;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -40,7 +39,8 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Generates an Account-Scoped access token (used before selecting a tenant or for global actions).
+     * Generates an Account-Scoped access token (used before selecting a tenant or
+     * for global actions).
      */
     public String generateAccountScopedToken(UUID userId, String email) {
         Instant now = Instant.now();
@@ -59,9 +59,11 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Generates a Tenant-Scoped access token (used for all tenant workspace operations).
+     * Generates a Tenant-Scoped access token (used for all tenant workspace
+     * operations).
      */
-    public String generateTenantScopedToken(UUID userId, String email, UUID tenantId, String tenantSlug, MembershipRole role) {
+    public String generateTenantScopedToken(UUID userId, String email, UUID tenantId, String tenantSlug,
+            Boolean isOwner, java.util.List<String> roles) {
         Instant now = Instant.now();
         Instant expiry = now.plus(jwtProperties.getAccessTokenExpiration());
 
@@ -70,7 +72,8 @@ public class JwtTokenProvider {
                 .claim("email", email)
                 .claim("tid", tenantId.toString())
                 .claim("slug", tenantSlug)
-                .claim("role", role.name())
+                .claim("isOwner", Boolean.TRUE.equals(isOwner))
+                .claim("roles", roles != null ? roles : java.util.Collections.emptyList())
                 .claim("tokenType", TokenType.TENANT_SCOPED.name())
                 .issuer(jwtProperties.getIssuer())
                 .issuedAt(Date.from(now))
@@ -88,7 +91,8 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Validates JWT token signature and expiration, attaching error reason to request if provided.
+     * Validates JWT token signature and expiration, attaching error reason to
+     * request if provided.
      */
     public boolean validateToken(String token, jakarta.servlet.http.HttpServletRequest request) {
         try {
@@ -146,9 +150,17 @@ public class JwtTokenProvider {
         return claims.get("slug", String.class);
     }
 
-    public MembershipRole getRole(Claims claims) {
-        String roleStr = claims.get("role", String.class);
-        return roleStr != null ? MembershipRole.valueOf(roleStr) : null;
+    @SuppressWarnings("unchecked")
+    public java.util.List<String> getRoles(Claims claims) {
+        Object rolesObj = claims.get("roles");
+        if (rolesObj instanceof java.util.List<?> list) {
+            return list.stream().map(Object::toString).toList();
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    public Boolean getIsOwner(Claims claims) {
+        return claims.get("isOwner", Boolean.class);
     }
 
     public TokenType getTokenType(Claims claims) {

@@ -5,7 +5,6 @@ import com.hrm.saas.domain.auth.dto.response.TenantMembershipResponse;
 import com.hrm.saas.domain.auth.dto.response.UserResponse;
 import com.hrm.saas.domain.auth.entity.TenantMembership;
 import com.hrm.saas.domain.auth.entity.User;
-import com.hrm.saas.domain.auth.enums.MembershipRole;
 import com.hrm.saas.domain.auth.enums.MembershipStatus;
 import com.hrm.saas.domain.tenant.entity.Tenant;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +88,7 @@ class AuthMapperTest {
         TenantMembership membership = TenantMembership.builder()
                 .id(membershipId)
                 .tenant(tenant)
-                .role(MembershipRole.ADMIN)
+                .isOwner(true)
                 .status(MembershipStatus.ACTIVE)
                 .joinedAt(Instant.now())
                 .build();
@@ -101,7 +100,7 @@ class AuthMapperTest {
         assertEquals(tenantId, response.getTenantId());
         assertEquals("Acme Corp", response.getTenantName());
         assertEquals("acme", response.getTenantSlug());
-        assertEquals(MembershipRole.ADMIN, response.getRole());
+        assertTrue(response.getIsOwner());
         assertEquals(MembershipStatus.ACTIVE, response.getStatus());
     }
 }

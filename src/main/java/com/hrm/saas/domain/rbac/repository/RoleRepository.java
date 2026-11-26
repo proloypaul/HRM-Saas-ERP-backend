@@ -29,4 +29,7 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
 
     @Query("SELECT COUNT(m) FROM TenantMembership m JOIN m.roles r WHERE r.id = :roleId")
     long countAssignedMembers(@Param("roleId") UUID roleId);
+
+    @Query("SELECT r.id, COUNT(m) FROM TenantMembership m JOIN m.roles r WHERE m.tenant.id = :tenantId GROUP BY r.id")
+    List<Object[]> countMembersPerRoleByTenant(@Param("tenantId") UUID tenantId);
 }

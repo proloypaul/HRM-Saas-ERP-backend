@@ -65,8 +65,17 @@ public class RbacServiceImpl implements RbacService {
     public List<RoleResponse> getRoles(UUID tenantId) {
         validateTenantExists(tenantId);
         List<Role> roles = roleRepository.findAllByTenantIdWithPermissions(tenantId);
+
+        // Fetch all role assignment counts in a single aggregation query (prevents N+1)
+        List<Object[]> counts = roleRepository.countMembersPerRoleByTenant(tenantId);
+        Map<UUID, Long> countMap = counts.stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> (Long) row[1]
+                ));
+
         return roles.stream()
-                .map(r -> rbacMapper.toRoleResponse(r, roleRepository.countAssignedMembers(r.getId())))
+                .map(r -> rbacMapper.toRoleResponse(r, countMap.getOrDefault(r.getId(), 0L)))
                 .toList();
     }
 

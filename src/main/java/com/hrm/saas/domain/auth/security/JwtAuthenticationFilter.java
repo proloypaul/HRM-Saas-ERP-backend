@@ -1,6 +1,5 @@
 package com.hrm.saas.domain.auth.security;
 
-import com.hrm.saas.domain.auth.enums.MembershipRole;
 import com.hrm.saas.domain.auth.enums.TokenType;
 import com.hrm.saas.domain.tenant.context.TenantContext;
 import io.jsonwebtoken.Claims;
@@ -35,8 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
-            @NonNull FilterChain filterChain
-    ) throws ServletException, IOException {
+            @NonNull FilterChain filterChain) throws ServletException, IOException {
         String token = resolveToken(request);
 
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token, request)) {
@@ -46,19 +44,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String email = jwtTokenProvider.getEmail(claims);
                 UUID tenantId = jwtTokenProvider.getTenantId(claims);
                 String slug = jwtTokenProvider.getTenantSlug(claims);
-                MembershipRole role = jwtTokenProvider.getRole(claims);
+                Boolean isOwner = jwtTokenProvider.getIsOwner(claims);
+                java.util.List<String> roles = jwtTokenProvider.getRoles(claims);
                 TokenType tokenType = jwtTokenProvider.getTokenType(claims);
 
                 UserPrincipal principal = UserPrincipal.builder()
                         .userId(userId)
                         .email(email)
                         .tenantId(tenantId)
-                        .role(role)
+                        .isOwner(isOwner)
+                        .roles(roles)
                         .tokenType(tokenType)
                         .build();
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(principal,
+                        null, principal.getAuthorities());
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
