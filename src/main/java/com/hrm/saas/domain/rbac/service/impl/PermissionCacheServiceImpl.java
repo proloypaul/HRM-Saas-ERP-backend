@@ -1,6 +1,7 @@
 package com.hrm.saas.domain.rbac.service.impl;
 
 import com.hrm.saas.common.cache.RedisCacheService;
+import com.hrm.saas.config.RedisCacheProperties;
 import com.hrm.saas.domain.auth.entity.TenantMembership;
 import com.hrm.saas.domain.auth.repository.TenantMembershipRepository;
 import com.hrm.saas.domain.rbac.service.PermissionCacheService;
@@ -8,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 import java.util.*;
 
 @Slf4j
@@ -18,8 +18,7 @@ public class PermissionCacheServiceImpl implements PermissionCacheService {
 
     private final RedisCacheService redisCacheService;
     private final TenantMembershipRepository tenantMembershipRepository;
-
-    private static final Duration PERM_CACHE_TTL = Duration.ofMinutes(30);
+    private final RedisCacheProperties cookProperties;
 
     private String buildUserKey(UUID tenantId, UUID userId) {
         return "rbac:perms:" + tenantId + ":" + userId;
@@ -42,7 +41,7 @@ public class PermissionCacheServiceImpl implements PermissionCacheService {
             return;
         }
         String key = buildUserKey(tenantId, userId);
-        redisCacheService.set(key, new ArrayList<>(permissions), PERM_CACHE_TTL);
+        redisCacheService.set(key, new ArrayList<>(permissions), cookProperties.getDefaultTtl());
     }
 
     @Override

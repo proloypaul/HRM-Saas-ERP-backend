@@ -47,6 +47,8 @@ class RbacServiceImplTest {
     private EffectivePermissionService effectivePermissionService;
     @Mock
     private PermissionCacheService permissionCacheService;
+    @Mock
+    private com.hrm.saas.domain.rbac.mapper.RbacMapper rbacMapper;
 
     @InjectMocks
     private RbacServiceImpl rbacService;
@@ -106,7 +108,19 @@ class RbacServiceImplTest {
                 .permissions(Set.of(payrollViewPerm))
                 .build();
 
-        when(roleRepository.save(any(Role.class))).thenReturn(savedRole);
+        RoleResponse expectedResponse = RoleResponse.builder()
+                .id(savedRole.getId())
+                .tenantId(tenantAId)
+                .code("ACCOUNTANT")
+                .name("Accountant")
+                .isSystem(false)
+                .permissions(Set.of(RbacPermissions.PAYROLL_VIEW))
+                .memberCount(0L)
+                .build();
+
+        when(rbacMapper.toEntity(any(CreateRoleRequest.class), eq(tenantA), any())).thenReturn(savedRole);
+        when(roleRepository.save(savedRole)).thenReturn(savedRole);
+        when(rbacMapper.toRoleResponse(savedRole, 0)).thenReturn(expectedResponse);
 
         CreateRoleRequest request = new CreateRoleRequest();
         request.setCode("ACCOUNTANT");
@@ -205,6 +219,13 @@ class RbacServiceImplTest {
 
         AssignMemberRolesRequest req = new AssignMemberRolesRequest();
         req.setRoleIds(Set.of(accountantRoleId));
+
+        when(rbacMapper.toRoleResponse(eq(accountantRole), anyLong())).thenReturn(RoleResponse.builder().build());
+        when(rbacMapper.toMemberRoleAssignmentResponse(eq(membership), any(), any()))
+                .thenReturn(com.hrm.saas.domain.rbac.dto.response.MemberRoleAssignmentResponse.builder()
+                        .membershipId(membershipId)
+                        .userId(targetUser.getId())
+                        .build());
 
         rbacService.assignRolesToMember(tenantAId, adminUserId, membershipId, req);
 

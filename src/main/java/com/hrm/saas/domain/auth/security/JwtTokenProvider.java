@@ -84,14 +84,36 @@ public class JwtTokenProvider {
      * Validates JWT token signature and expiration.
      */
     public boolean validateToken(String token) {
+        return validateToken(token, null);
+    }
+
+    /**
+     * Validates JWT token signature and expiration, attaching error reason to request if provided.
+     */
+    public boolean validateToken(String token, jakarta.servlet.http.HttpServletRequest request) {
         try {
             Jwts.parser()
                     .verifyWith(secretKey)
                     .build()
                     .parseSignedClaims(token);
             return true;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.debug("Expired JWT token: {}", e.getMessage());
+            if (request != null) {
+                request.setAttribute("jwt_token_error", "JWT expired: " + e.getMessage());
+            }
+            return false;
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            log.debug("Invalid JWT signature: {}", e.getMessage());
+            if (request != null) {
+                request.setAttribute("jwt_token_error", "Invalid JWT signature");
+            }
+            return false;
         } catch (JwtException | IllegalArgumentException e) {
             log.debug("Invalid JWT token: {}", e.getMessage());
+            if (request != null) {
+                request.setAttribute("jwt_token_error", "Invalid JWT token: " + e.getMessage());
+            }
             return false;
         }
     }

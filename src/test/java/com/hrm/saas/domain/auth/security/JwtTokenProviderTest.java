@@ -24,6 +24,7 @@ class JwtTokenProviderTest {
         jwtProperties = new JwtProperties();
         jwtProperties.setSecret("404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970");
         jwtProperties.setAccessTokenExpiration(Duration.ofMinutes(15));
+        jwtProperties.setRefreshTokenExpiration(Duration.ofDays(7));
         jwtProperties.setIssuer("hrm-saas");
 
         jwtTokenProvider = new JwtTokenProvider(jwtProperties);
