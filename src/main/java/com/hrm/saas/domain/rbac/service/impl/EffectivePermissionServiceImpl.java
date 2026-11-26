@@ -1,7 +1,6 @@
 package com.hrm.saas.domain.rbac.service.impl;
 
 import com.hrm.saas.domain.auth.entity.TenantMembership;
-import com.hrm.saas.domain.auth.enums.MembershipRole;
 import com.hrm.saas.domain.auth.enums.MembershipStatus;
 import com.hrm.saas.domain.auth.repository.TenantMembershipRepository;
 import com.hrm.saas.domain.rbac.constants.RbacPermissions;
@@ -56,22 +55,26 @@ public class EffectivePermissionServiceImpl implements EffectivePermissionServic
 
         Set<String> effective = new HashSet<>();
 
-        // (a) Legacy/Fallback Role mapping if membership.roles is empty
-        if (membership.getRoles().isEmpty() && membership.getRole() != null) {
-            mapLegacyRolePermissions(tenantId, membership.getRole(), effective);
-        } else {
-            // (b) Roles assigned via membership_roles
-            for (Role role : membership.getRoles()) {
-                if (Boolean.TRUE.equals(role.getIsActive())) {
-                    for (Permission perm : role.getPermissions()) {
-                        effective.add(perm.getCode());
-                    }
+        // If the membership is marked as OWNER, ensure full workspace admin permissions
+        if (Boolean.TRUE.equals(membership.getIsOwner())) {
+            Set<String> adminPerms = RbacPermissions.SYSTEM_ROLE_PERMISSIONS.get(RbacPermissions.ROLE_TENANT_ADMIN);
+            if (adminPerms != null) {
+                effective.addAll(adminPerms);
+            }
+        }
+
+        // Roles assigned via membership_roles
+        for (Role role : membership.getRoles()) {
+            if (Boolean.TRUE.equals(role.getIsActive())) {
+                for (Permission perm : role.getPermissions()) {
+                    effective.add(perm.getCode());
                 }
             }
         }
 
-        // (c) Apply fine-grained user permission overrides
-        List<UserPermissionOverride> overrides = overrideRepository.findByMembershipIdWithPermission(membership.getId());
+        // (b) Apply fine-grained user permission overrides
+        List<UserPermissionOverride> overrides = overrideRepository
+                .findByMembershipIdWithPermission(membership.getId());
         for (UserPermissionOverride override : overrides) {
             String code = override.getPermission().getCode();
             if (override.getEffect() == OverrideEffect.GRANT) {
@@ -91,25 +94,5 @@ public class EffectivePermissionServiceImpl implements EffectivePermissionServic
     public boolean hasPermission(UUID tenantId, UUID userId, String permissionCode) {
         Set<String> permissions = getEffectivePermissions(tenantId, userId);
         return permissions.contains(permissionCode);
-    }
-
-    private void mapLegacyRolePermissions(UUID tenantId, MembershipRole role, Set<String> target) {
-        if (role == null) return;
-        String roleCode = switch (role) {
-            case OWNER, ADMIN -> RbacPermissions.ROLE_TENANT_ADMIN;
-            case HR_MANAGER -> RbacPermissions.ROLE_HR_MANAGER;
-            case EMPLOYEE -> RbacPermissions.ROLE_EMPLOYEE;
-        };
-
-        roleRepository.findByTenantIdAndCode(tenantId, roleCode)
-                .ifPresentOrElse(
-                        r -> r.getPermissions().forEach(p -> target.add(p.getCode())),
-                        () -> {
-                            Set<String> defaults = RbacPermissions.SYSTEM_ROLE_PERMISSIONS.get(roleCode);
-                            if (defaults != null) {
-                                target.addAll(defaults);
-                            }
-                        }
-                );
     }
 }

@@ -1,6 +1,5 @@
 package com.hrm.saas.domain.auth.security;
 
-import com.hrm.saas.domain.auth.enums.MembershipRole;
 import com.hrm.saas.domain.auth.enums.TokenType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,6 +12,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Getter
 @Builder
@@ -22,13 +22,17 @@ public class UserPrincipal implements UserDetails {
     private final UUID userId;
     private final String email;
     private final UUID tenantId;
-    private final MembershipRole role;
+    private final Boolean isOwner;
+    @Builder.Default
+    private final List<String> roles = Collections.emptyList();
     private final TokenType tokenType;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        if (role != null) {
-            return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        if (roles != null && !roles.isEmpty()) {
+            return roles.stream()
+                    .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+                    .collect(Collectors.toList());
         }
         return Collections.emptyList();
     }

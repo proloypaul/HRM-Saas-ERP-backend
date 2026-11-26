@@ -9,7 +9,6 @@ import com.hrm.saas.domain.auth.entity.RefreshToken;
 import com.hrm.saas.domain.auth.entity.TenantMembership;
 import com.hrm.saas.domain.auth.entity.User;
 import com.hrm.saas.domain.auth.enums.ActionTokenType;
-import com.hrm.saas.domain.auth.enums.MembershipRole;
 import com.hrm.saas.domain.auth.enums.MembershipStatus;
 import com.hrm.saas.domain.auth.enums.TokenType;
 import com.hrm.saas.domain.auth.mapper.AuthMapper;
@@ -74,7 +73,8 @@ public class AuthServiceImpl implements AuthService {
 
         TenantMembership activeMembership = null;
 
-        // If company details are provided, register the company and make the user the OWNER
+        // If company details are provided, register the company and make the user the
+        // OWNER
         if (request.getCompanyName() != null && !request.getCompanyName().isBlank()) {
             String slug = request.getCompanySlug() != null && !request.getCompanySlug().isBlank()
                     ? request.getCompanySlug().trim().toLowerCase()
@@ -88,7 +88,8 @@ public class AuthServiceImpl implements AuthService {
                     .build());
 
             Tenant tenant = tenantRepository.findById(tenantResponse.getId())
-                    .orElseThrow(() -> new AppException("Tenant not found after creation", HttpStatus.INTERNAL_SERVER_ERROR));
+                    .orElseThrow(() -> new AppException("Tenant not found after creation",
+                            HttpStatus.INTERNAL_SERVER_ERROR));
 
             // Seed RBAC system roles for this tenant
             List<Role> seededRoles = permissionCatalogSeeder.seedSystemRolesForTenant(tenant);
@@ -97,18 +98,20 @@ public class AuthServiceImpl implements AuthService {
                     .findFirst()
                     .orElse(null);
 
-            Set<Role> assignedRoles = tenantAdminRole != null ? new java.util.HashSet<>(List.of(tenantAdminRole)) : new java.util.HashSet<>();
+            Set<Role> assignedRoles = tenantAdminRole != null ? new java.util.HashSet<>(List.of(tenantAdminRole))
+                    : new java.util.HashSet<>();
 
             TenantMembership membership = TenantMembership.builder()
                     .user(savedUser)
                     .tenant(tenant)
-                    .role(MembershipRole.OWNER)
+                    .isOwner(true)
                     .roles(assignedRoles)
                     .status(MembershipStatus.ACTIVE)
                     .build();
 
             activeMembership = membershipRepository.save(membership);
-            log.info("Assigned user '{}' as OWNER of tenant '{}'", savedUser.getId(), tenant.getId());
+            log.info("Assigned user '{}' as OWNER with TENANT_ADMIN role in tenant '{}'", savedUser.getId(),
+                    tenant.getId());
         }
 
         // Issue initial refresh token and access token
@@ -133,7 +136,9 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new AppException("Invalid email or password", HttpStatus.UNAUTHORIZED));
 
         if (user.isAccountLocked()) {
-            throw new AppException("Account is temporarily locked due to multiple failed attempts. Please try again later.", HttpStatus.LOCKED);
+            throw new AppException(
+                    "Account is temporarily locked due to multiple failed attempts. Please try again later.",
+                    HttpStatus.LOCKED);
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -156,14 +161,17 @@ public class AuthServiceImpl implements AuthService {
             selectedMembership = activeMemberships.stream()
                     .filter(m -> m.getTenant().getId().equals(request.getTenantId()))
                     .findFirst()
-                    .orElseThrow(() -> new AppException("You do not have active membership in the selected company", HttpStatus.FORBIDDEN));
+                    .orElseThrow(() -> new AppException("You do not have active membership in the selected company",
+                            HttpStatus.FORBIDDEN));
         } else if (activeMemberships.size() == 1) {
             selectedMembership = activeMemberships.get(0);
         }
 
         // Validate selected tenant status
         if (selectedMembership != null && selectedMembership.getTenant().getStatus() != TenantStatus.ACTIVE) {
-            throw new AppException("Selected company is " + selectedMembership.getTenant().getStatus().name().toLowerCase(), HttpStatus.FORBIDDEN);
+            throw new AppException(
+                    "Selected company is " + selectedMembership.getTenant().getStatus().name().toLowerCase(),
+                    HttpStatus.FORBIDDEN);
         }
 
         UUID familyId = UUID.randomUUID();
@@ -194,9 +202,11 @@ public class AuthServiceImpl implements AuthService {
 
         // RTR Breach Detection: If token was already used, an attacker is replaying it!
         if (Boolean.TRUE.equals(existingToken.getIsUsed())) {
-            log.warn("Detected reused refresh token for family: {}. Revoking all tokens in family!", existingToken.getFamilyId());
+            log.warn("Detected reused refresh token for family: {}. Revoking all tokens in family!",
+                    existingToken.getFamilyId());
             refreshTokenRepository.revokeFamily(existingToken.getFamilyId());
-            throw new AppException("Invalid refresh token (re-use detected). Session terminated.", HttpStatus.UNAUTHORIZED);
+            throw new AppException("Invalid refresh token (re-use detected). Session terminated.",
+                    HttpStatus.UNAUTHORIZED);
         }
 
         if (existingToken.isExpired()) {
@@ -255,13 +265,16 @@ public class AuthServiceImpl implements AuthService {
                 .filter(u -> !u.getIsDeleted())
                 .orElseThrow(() -> new AppException("User not found", HttpStatus.NOT_FOUND));
 
-        TenantMembership targetMembership = membershipRepository.findByUserIdAndTenantIdWithTenant(userId, targetTenantId)
+        TenantMembership targetMembership = membershipRepository
+                .findByUserIdAndTenantIdWithTenant(userId, targetTenantId)
                 .filter(m -> !m.getIsDeleted() && m.getStatus() == MembershipStatus.ACTIVE)
-                .orElseThrow(() -> new AppException("You do not have active membership in this company", HttpStatus.FORBIDDEN));
+                .orElseThrow(() -> new AppException("You do not have active membership in this company",
+                        HttpStatus.FORBIDDEN));
 
         Tenant tenant = targetMembership.getTenant();
         if (tenant.getStatus() != TenantStatus.ACTIVE) {
-            throw new AppException("Company is currently " + tenant.getStatus().name().toLowerCase(), HttpStatus.FORBIDDEN);
+            throw new AppException("Company is currently " + tenant.getStatus().name().toLowerCase(),
+                    HttpStatus.FORBIDDEN);
         }
 
         List<TenantMembership> activeMemberships = membershipRepository.findAllByUserIdAndStatusWithTenant(
@@ -280,7 +293,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
-        Optional<User> userOpt = userRepository.findByEmailIgnoreCaseAndIsDeletedFalse(request.getEmail().trim().toLowerCase());
+        Optional<User> userOpt = userRepository
+                .findByEmailIgnoreCaseAndIsDeletedFalse(request.getEmail().trim().toLowerCase());
         if (userOpt.isEmpty()) {
             // For security, do not disclose whether user exists
             return;
@@ -299,7 +313,8 @@ public class AuthServiceImpl implements AuthService {
 
         actionTokenRepository.save(actionToken);
         log.info("Created password reset token for user '{}': {}", user.getId(), rawToken);
-        // Note: Email sending integration will dispatch rawToken in Phase 04 / Notification service
+        // Note: Email sending integration will dispatch rawToken in Phase 04 /
+        // Notification service
     }
 
     @Override
@@ -307,7 +322,7 @@ public class AuthServiceImpl implements AuthService {
     public void resetPassword(ResetPasswordRequest request) {
         String tokenHash = TokenHashUtils.hashToken(request.getToken());
         AuthActionToken actionToken = actionTokenRepository.findByTokenHashAndTokenTypeWithUser(
-                        tokenHash, ActionTokenType.PASSWORD_RESET)
+                tokenHash, ActionTokenType.PASSWORD_RESET)
                 .orElseThrow(() -> new AppException("Invalid or expired password reset token", HttpStatus.BAD_REQUEST));
 
         if (!actionToken.isValid()) {
@@ -332,7 +347,7 @@ public class AuthServiceImpl implements AuthService {
     public void verifyEmail(VerifyEmailRequest request) {
         String tokenHash = TokenHashUtils.hashToken(request.getToken());
         AuthActionToken actionToken = actionTokenRepository.findByTokenHashAndTokenTypeWithUser(
-                        tokenHash, ActionTokenType.EMAIL_VERIFICATION)
+                tokenHash, ActionTokenType.EMAIL_VERIFICATION)
                 .orElseThrow(() -> new AppException("Invalid or expired verification token", HttpStatus.BAD_REQUEST));
 
         if (!actionToken.isValid()) {
@@ -386,19 +401,24 @@ public class AuthServiceImpl implements AuthService {
         return rawToken;
     }
 
-    private AuthResponse buildAuthResponse(User user, TenantMembership activeMembership, List<TenantMembership> allMemberships) {
+    private AuthResponse buildAuthResponse(User user, TenantMembership activeMembership,
+            List<TenantMembership> allMemberships) {
         String accessToken;
         TokenType tokenType;
 
         if (activeMembership != null && activeMembership.getTenant() != null) {
             tokenType = TokenType.TENANT_SCOPED;
+            List<String> roleCodes = (activeMembership.getRoles() != null && !activeMembership.getRoles().isEmpty())
+                    ? activeMembership.getRoles().stream().map(Role::getCode).toList()
+                    : List.of(RbacPermissions.ROLE_EMPLOYEE);
+
             accessToken = jwtTokenProvider.generateTenantScopedToken(
                     user.getId(),
                     user.getEmail(),
                     activeMembership.getTenant().getId(),
                     activeMembership.getTenant().getSlug(),
-                    activeMembership.getRole()
-            );
+                    activeMembership.getIsOwner(),
+                    roleCodes);
         } else {
             tokenType = TokenType.ACCOUNT_SCOPED;
             accessToken = jwtTokenProvider.generateAccountScopedToken(user.getId(), user.getEmail());

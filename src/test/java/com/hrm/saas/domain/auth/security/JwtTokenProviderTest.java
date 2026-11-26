@@ -1,7 +1,6 @@
 package com.hrm.saas.domain.auth.security;
 
 import com.hrm.saas.config.JwtProperties;
-import com.hrm.saas.domain.auth.enums.MembershipRole;
 import com.hrm.saas.domain.auth.enums.TokenType;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +23,7 @@ class JwtTokenProviderTest {
         jwtProperties = new JwtProperties();
         jwtProperties.setSecret("404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970");
         jwtProperties.setAccessTokenExpiration(Duration.ofMinutes(15));
+        jwtProperties.setRefreshTokenExpiration(Duration.ofDays(7));
         jwtProperties.setIssuer("hrm-saas");
 
         jwtTokenProvider = new JwtTokenProvider(jwtProperties);
@@ -54,9 +54,10 @@ class JwtTokenProviderTest {
         UUID tenantId = UUID.randomUUID();
         String email = "hr@acme.com";
         String slug = "acme";
-        MembershipRole role = MembershipRole.ADMIN;
+        Boolean isOwner = false;
+        java.util.List<String> roles = java.util.List.of("TENANT_ADMIN");
 
-        String token = jwtTokenProvider.generateTenantScopedToken(userId, email, tenantId, slug, role);
+        String token = jwtTokenProvider.generateTenantScopedToken(userId, email, tenantId, slug, isOwner, roles);
         assertNotNull(token);
         assertTrue(jwtTokenProvider.validateToken(token));
 
@@ -65,7 +66,8 @@ class JwtTokenProviderTest {
         assertEquals(email, jwtTokenProvider.getEmail(claims));
         assertEquals(tenantId, jwtTokenProvider.getTenantId(claims));
         assertEquals(slug, jwtTokenProvider.getTenantSlug(claims));
-        assertEquals(role, jwtTokenProvider.getRole(claims));
+        assertEquals(isOwner, jwtTokenProvider.getIsOwner(claims));
+        assertEquals(roles, jwtTokenProvider.getRoles(claims));
         assertEquals(TokenType.TENANT_SCOPED, jwtTokenProvider.getTokenType(claims));
     }
 

@@ -15,6 +15,7 @@ import com.hrm.saas.domain.rbac.dto.response.RoleResponse;
 import com.hrm.saas.domain.rbac.entity.Permission;
 import com.hrm.saas.domain.rbac.entity.Role;
 import com.hrm.saas.domain.rbac.enums.PermissionModule;
+import com.hrm.saas.domain.rbac.mapper.RbacMapper;
 import com.hrm.saas.domain.rbac.repository.PermissionRepository;
 import com.hrm.saas.domain.rbac.repository.RoleRepository;
 import com.hrm.saas.domain.rbac.service.EffectivePermissionService;
@@ -42,12 +43,13 @@ public class RbacServiceImpl implements RbacService {
     private final TenantMembershipRepository membershipRepository;
     private final EffectivePermissionService effectivePermissionService;
     private final PermissionCacheService permissionCacheService;
+    private final RbacMapper rbacMapper;
 
     @Override
     @Transactional(readOnly = true)
     public List<PermissionResponse> getAllPermissions() {
         return permissionRepository.findByIsAssignableTrueOrderByModuleAscDisplayNameAsc().stream()
-                .map(this::mapPermissionResponse)
+                .map(rbacMapper::toPermissionResponse)
                 .toList();
     }
 
@@ -55,22 +57,7 @@ public class RbacServiceImpl implements RbacService {
     @Transactional(readOnly = true)
     public List<ModulePermissionsResponse> getPermissionsGroupedByModule() {
         List<Permission> permissions = permissionRepository.findByIsAssignableTrueOrderByModuleAscDisplayNameAsc();
-        Map<PermissionModule, List<PermissionResponse>> grouped = permissions.stream()
-                .map(this::mapPermissionResponse)
-                .collect(Collectors.groupingBy(PermissionResponse::getModule, LinkedHashMap::new, Collectors.toList()));
-
-        List<ModulePermissionsResponse> result = new ArrayList<>();
-        for (PermissionModule module : PermissionModule.values()) {
-            List<PermissionResponse> modulePerms = grouped.getOrDefault(module, List.of());
-            if (!modulePerms.isEmpty()) {
-                result.add(ModulePermissionsResponse.builder()
-                        .module(module)
-                        .moduleName(formatModuleName(module))
-                        .permissions(modulePerms)
-                        .build());
-            }
-        }
-        return result;
+        return rbacMapper.toGroupedModuleResponses(permissions);
     }
 
     @Override
@@ -78,7 +65,18 @@ public class RbacServiceImpl implements RbacService {
     public List<RoleResponse> getRoles(UUID tenantId) {
         validateTenantExists(tenantId);
         List<Role> roles = roleRepository.findAllByTenantIdWithPermissions(tenantId);
-        return roles.stream().map(this::mapRoleResponse).toList();
+
+        // Fetch all role assignment counts in a single aggregation query (prevents N+1)
+        List<Object[]> counts = roleRepository.countMembersPerRoleByTenant(tenantId);
+        Map<UUID, Long> countMap = counts.stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> (Long) row[1]
+                ));
+
+        return roles.stream()
+                .map(r -> rbacMapper.toRoleResponse(r, countMap.getOrDefault(r.getId(), 0L)))
+                .toList();
     }
 
     @Override
@@ -86,7 +84,8 @@ public class RbacServiceImpl implements RbacService {
     public RoleResponse getRole(UUID tenantId, UUID roleId) {
         Role role = roleRepository.findByIdAndTenantIdWithPermissions(roleId, tenantId)
                 .orElseThrow(() -> new AppException("Role not found with ID: " + roleId, HttpStatus.NOT_FOUND));
-        return mapRoleResponse(role);
+        long count = roleRepository.countAssignedMembers(role.getId());
+        return rbacMapper.toRoleResponse(role, count);
     }
 
     @Override
@@ -103,20 +102,10 @@ public class RbacServiceImpl implements RbacService {
 
         Set<Permission> permissions = resolvePermissions(request.getPermissions());
 
-        Role role = Role.builder()
-                .tenant(tenant)
-                .code(request.getCode().toUpperCase())
-                .name(request.getName().trim())
-                .description(request.getDescription())
-                .priority(request.getPriority() != null ? request.getPriority() : 50)
-                .isSystem(false)
-                .isActive(true)
-                .permissions(permissions)
-                .build();
-
+        Role role = rbacMapper.toEntity(request, tenant, permissions);
         Role saved = roleRepository.save(role);
         log.info("Created custom role '{}' for tenant {}", saved.getCode(), tenantId);
-        return mapRoleResponse(saved);
+        return rbacMapper.toRoleResponse(saved, 0);
     }
 
     @Override
@@ -153,7 +142,8 @@ public class RbacServiceImpl implements RbacService {
         permissionCacheService.evictUsersWithRole(tenantId, roleId);
         log.info("Updated role '{}' ({}) and evicted active user permission caches", updated.getCode(), roleId);
 
-        return mapRoleResponse(updated);
+        long count = roleRepository.countAssignedMembers(updated.getId());
+        return rbacMapper.toRoleResponse(updated, count);
     }
 
     @Override
@@ -168,7 +158,8 @@ public class RbacServiceImpl implements RbacService {
 
         long assignedCount = roleRepository.countAssignedMembers(roleId);
         if (assignedCount > 0) {
-            throw new AppException("Cannot delete role '" + role.getName() + "'. It is actively assigned to " + assignedCount + " user(s). Reassign them first.");
+            throw new AppException("Cannot delete role '" + role.getName() + "'. It is actively assigned to "
+                    + assignedCount + " user(s). Reassign them first.");
         }
 
         roleRepository.delete(role);
@@ -180,14 +171,17 @@ public class RbacServiceImpl implements RbacService {
     @Transactional
     public RoleResponse cloneRole(UUID tenantId, UUID currentUserId, UUID sourceRoleId, CloneRoleRequest request) {
         Role sourceRole = roleRepository.findByIdAndTenantIdWithPermissions(sourceRoleId, tenantId)
-                .orElseThrow(() -> new AppException("Source role not found with ID: " + sourceRoleId, HttpStatus.NOT_FOUND));
+                .orElseThrow(
+                        () -> new AppException("Source role not found with ID: " + sourceRoleId, HttpStatus.NOT_FOUND));
 
         CreateRoleRequest createReq = new CreateRoleRequest();
         createReq.setCode(request.getNewCode());
         createReq.setName(request.getNewName());
-        createReq.setDescription(request.getNewDescription() != null ? request.getNewDescription() : "Cloned from " + sourceRole.getName());
+        createReq.setDescription(request.getNewDescription() != null ? request.getNewDescription()
+                : "Cloned from " + sourceRole.getName());
         createReq.setPriority(sourceRole.getPriority() + 5);
-        createReq.setPermissions(sourceRole.getPermissions().stream().map(Permission::getCode).collect(Collectors.toSet()));
+        createReq.setPermissions(
+                sourceRole.getPermissions().stream().map(Permission::getCode).collect(Collectors.toSet()));
 
         return createRole(tenantId, currentUserId, createReq);
     }
@@ -196,30 +190,29 @@ public class RbacServiceImpl implements RbacService {
     @Transactional(readOnly = true)
     public MemberRoleAssignmentResponse getMemberRoles(UUID tenantId, UUID membershipId) {
         TenantMembership membership = membershipRepository.findById(membershipId)
-                .orElseThrow(() -> new AppException("Membership not found with ID: " + membershipId, HttpStatus.NOT_FOUND));
+                .orElseThrow(
+                        () -> new AppException("Membership not found with ID: " + membershipId, HttpStatus.NOT_FOUND));
 
         if (!membership.getTenant().getId().equals(tenantId)) {
             throw new AppException("Membership does not belong to this tenant");
         }
 
-        Set<String> effective = effectivePermissionService.getEffectivePermissions(tenantId, membership.getUser().getId());
-        List<RoleResponse> assigned = membership.getRoles().stream().map(this::mapRoleResponse).toList();
+        Set<String> effective = effectivePermissionService.getEffectivePermissions(tenantId,
+                membership.getUser().getId());
+        List<RoleResponse> assigned = membership.getRoles().stream()
+                .map(r -> rbacMapper.toRoleResponse(r, roleRepository.countAssignedMembers(r.getId())))
+                .toList();
 
-        return MemberRoleAssignmentResponse.builder()
-                .membershipId(membership.getId())
-                .userId(membership.getUser().getId())
-                .email(membership.getUser().getEmail())
-                .fullName(membership.getUser().getFirstName() + " " + membership.getUser().getLastName())
-                .assignedRoles(assigned)
-                .effectivePermissions(effective)
-                .build();
+        return rbacMapper.toMemberRoleAssignmentResponse(membership, assigned, effective);
     }
 
     @Override
     @Transactional
-    public MemberRoleAssignmentResponse assignRolesToMember(UUID tenantId, UUID currentUserId, UUID membershipId, AssignMemberRolesRequest request) {
+    public MemberRoleAssignmentResponse assignRolesToMember(UUID tenantId, UUID currentUserId, UUID membershipId,
+            AssignMemberRolesRequest request) {
         TenantMembership membership = membershipRepository.findById(membershipId)
-                .orElseThrow(() -> new AppException("Membership not found with ID: " + membershipId, HttpStatus.NOT_FOUND));
+                .orElseThrow(
+                        () -> new AppException("Membership not found with ID: " + membershipId, HttpStatus.NOT_FOUND));
 
         if (!membership.getTenant().getId().equals(tenantId)) {
             throw new AppException("Membership does not belong to this tenant");
@@ -230,9 +223,11 @@ public class RbacServiceImpl implements RbacService {
             for (UUID rId : request.getRoleIds()) {
                 Role role = roleRepository.findByIdAndTenantIdWithPermissions(rId, tenantId)
                         .orElseThrow(() -> new AppException("Role not found with ID: " + rId, HttpStatus.NOT_FOUND));
-                
-                // Delegation check: Granter cannot assign roles with permissions they don't have
-                Set<String> requiredPerms = role.getPermissions().stream().map(Permission::getCode).collect(Collectors.toSet());
+
+                // Delegation check: Granter cannot assign roles with permissions they don't
+                // have
+                Set<String> requiredPerms = role.getPermissions().stream().map(Permission::getCode)
+                        .collect(Collectors.toSet());
                 validateDelegationAuthority(tenantId, currentUserId, requiredPerms);
 
                 rolesToAssign.add(role);
@@ -272,9 +267,11 @@ public class RbacServiceImpl implements RbacService {
         missingPermissions.removeAll(granterPermissions);
 
         if (!missingPermissions.isEmpty()) {
-            log.warn("Privilege escalation prevented! User {} in tenant {} attempted to delegate permissions not held: {}",
+            log.warn(
+                    "Privilege escalation prevented! User {} in tenant {} attempted to delegate permissions not held: {}",
                     currentUserId, tenantId, missingPermissions);
-            throw new AppException("Privilege Escalation Detected: You cannot grant permissions you do not possess: " + missingPermissions);
+            throw new AppException("Privilege Escalation Detected: You cannot grant permissions you do not possess: "
+                    + missingPermissions);
         }
     }
 
@@ -295,49 +292,5 @@ public class RbacServiceImpl implements RbacService {
     private Tenant validateTenantExists(UUID tenantId) {
         return tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new AppException("Tenant not found with ID: " + tenantId, HttpStatus.NOT_FOUND));
-    }
-
-    private PermissionResponse mapPermissionResponse(Permission p) {
-        return PermissionResponse.builder()
-                .id(p.getId())
-                .code(p.getCode())
-                .module(p.getModule())
-                .displayName(p.getDisplayName())
-                .description(p.getDescription())
-                .isAssignable(p.getIsAssignable())
-                .build();
-    }
-
-    private RoleResponse mapRoleResponse(Role r) {
-        long count = roleRepository.countAssignedMembers(r.getId());
-        Set<String> permCodes = r.getPermissions() != null
-                ? r.getPermissions().stream().map(Permission::getCode).collect(Collectors.toSet())
-                : Collections.emptySet();
-
-        return RoleResponse.builder()
-                .id(r.getId())
-                .tenantId(r.getTenant() != null ? r.getTenant().getId() : null)
-                .code(r.getCode())
-                .name(r.getName())
-                .description(r.getDescription())
-                .isSystem(r.getIsSystem())
-                .isActive(r.getIsActive())
-                .priority(r.getPriority())
-                .permissions(permCodes)
-                .memberCount(count)
-                .createdAt(r.getCreatedAt())
-                .updatedAt(r.getUpdatedAt())
-                .build();
-    }
-
-    private String formatModuleName(PermissionModule module) {
-        return switch (module) {
-            case EMPLOYEE -> "Employee Directory";
-            case ATTENDANCE -> "Attendance & Timesheet";
-            case LEAVE -> "Leave Management";
-            case PAYROLL -> "Payroll & Compensation";
-            case ROLE -> "Role & Access Control";
-            case SYSTEM -> "System & Settings";
-        };
     }
 }

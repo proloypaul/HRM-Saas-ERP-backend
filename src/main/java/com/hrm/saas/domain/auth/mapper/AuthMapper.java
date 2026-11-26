@@ -52,12 +52,17 @@ public class AuthMapper {
         if (membership == null) {
             return null;
         }
+        List<String> roleCodes = (membership.getRoles() != null && !membership.getRoles().isEmpty())
+                ? membership.getRoles().stream().map(com.hrm.saas.domain.rbac.entity.Role::getCode).collect(Collectors.toList())
+                : List.of("EMPLOYEE");
+
         return TenantMembershipResponse.builder()
                 .membershipId(membership.getId())
                 .tenantId(membership.getTenant() != null ? membership.getTenant().getId() : null)
                 .tenantName(membership.getTenant() != null ? membership.getTenant().getName() : null)
                 .tenantSlug(membership.getTenant() != null ? membership.getTenant().getSlug() : null)
-                .role(membership.getRole())
+                .isOwner(Boolean.TRUE.equals(membership.getIsOwner()))
+                .roles(roleCodes)
                 .status(membership.getStatus())
                 .joinedAt(membership.getJoinedAt())
                 .build();
